@@ -1,0 +1,128 @@
+
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+enum Role {
+  USER
+  SUPER_ADMIN
+}
+
+enum PackageStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model User {
+  id              String   @id @default(uuid())
+
+  name            String
+  phone           String   @unique
+  email           String   @unique
+  password        String
+  role            Role     @default(USER)
+
+  packageId       String?
+  package         Package? @relation(fields: [packageId], references: [id])
+
+  usedStorageMB   Float    @default(0)
+
+  events          Event[]
+
+  createdAt       DateTime @default(now())
+
+  @@map("users")
+  @@index([phone])
+  @@index([email])
+  @@index([packageId])
+}
+
+model Package {
+  id              String   @id @default(uuid())
+
+  name            String
+  storageLimitMB  Float
+  description     String[]
+  status          PackageStatus @default(ACTIVE)
+
+  price           Float
+
+  users           User[]
+
+  @@map("packages")
+  @@index([name])
+}
+
+
+
+model FaceEmbedding {
+  id              String @id @default(uuid())
+
+  photoId         String
+  photo           Photo @relation(fields: [photoId], references: [id])
+
+  vector          Json
+
+  @@map("face_embeddings")
+  @@index([photoId])
+}
+
+
+model Event {
+  id              String   @id @default(uuid())
+
+  title           String
+  coverImage      String?
+
+  userId          String
+  user            User @relation(fields: [userId], references: [id])
+
+  photos          Photo[]
+
+  createdAt       DateTime @default(now())
+
+  @@map("events")
+  @@index([userId])
+  @@index([createdAt])
+}
+
+
+model Photo {
+  id              String   @id @default(uuid())
+
+  imageUrl        String
+  publicId        String
+
+  sizeMB          Float
+
+  eventId         String
+  event           Event @relation(fields: [eventId], references: [id])
+
+  faces           FaceEmbedding[]
+
+  createdAt       DateTime @default(now())
+
+  @@map("photos")
+  @@index([eventId])
+  @@index([createdAt])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  name      String
+  rating    Int
+  comment   String
+  imageUrl  String?
+  createdAt DateTime @default(now())
+
+  @@map("reviews")
+  @@index([createdAt])
+}

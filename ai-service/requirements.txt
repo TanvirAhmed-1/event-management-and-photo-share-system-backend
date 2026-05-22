@@ -1,0 +1,6 @@
+flask
+deepface
+opencv-python
+requests
+numpy
+gunicorn
