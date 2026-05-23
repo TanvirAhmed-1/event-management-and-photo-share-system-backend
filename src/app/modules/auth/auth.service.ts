@@ -20,23 +20,31 @@ const registerUser = async (payload: IRegisterUserRequest) => {
   }
 
   // Find the package to assign
-  let assignedPackageId = null;
+  let targetPackage = null;
 
   if (payload.packageId) {
-    const selectedPackage = await prisma.package.findUnique({
+    targetPackage = await prisma.package.findUnique({
       where: { id: payload.packageId },
     });
-    if (!selectedPackage) {
+    if (!targetPackage) {
       throw new Error("Selected package not found!");
     }
-    assignedPackageId = selectedPackage.id;
   } else {
     // Fallback to Free package if not provided
-    const freePackage = await prisma.package.findFirst({
+    targetPackage = await prisma.package.findFirst({
       where: { name: { equals: "Free", mode: "insensitive" } },
     });
-    assignedPackageId = freePackage?.id || null;
   }
+
+  const assignedPackageId = targetPackage?.id || null;
+  const durationDays = targetPackage?.durationDays || 30;
+
+  const packageActivatedAt = new Date();
+  const packageExpiredAt = new Date();
+  packageExpiredAt.setDate(packageExpiredAt.getDate() + durationDays);
+
+  const isFreePackage = targetPackage?.name.toLowerCase() === "free";
+  const isActive = isFreePackage ? true : false;
 
   const hashedPassword = await bcrypt.hash(payload.password!, config.bcrypt_salt_rounds);
 
@@ -48,6 +56,9 @@ const registerUser = async (payload: IRegisterUserRequest) => {
       password: hashedPassword,
       packageId: assignedPackageId,
       usedStorageMB: 0,
+      packageActivatedAt,
+      packageExpiredAt,
+      isActive,
     },
     include: {
       package: true,

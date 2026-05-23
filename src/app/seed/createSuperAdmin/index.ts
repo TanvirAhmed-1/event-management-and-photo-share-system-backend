@@ -8,14 +8,30 @@ export async function seedSuperAdmin() {
     const superAdminPhone = config.super_admin.phone;
     const superAdminPassword = config.super_admin.password;
 
-    // 1. Check if Super Admin already exists
-    const superAdminExists = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { email: superAdminEmail },
-          { role: "SUPER_ADMIN" }
-        ]
+    // 1. Check if a user with this email already exists
+    const existingUserByEmail = await prisma.user.findUnique({
+      where: { email: superAdminEmail }
+    });
+
+    if (existingUserByEmail) {
+      if (existingUserByEmail.role !== "SUPER_ADMIN" || !existingUserByEmail.isActive) {
+        console.log(`[Seed] User with email ${superAdminEmail} exists but role is ${existingUserByEmail.role}. Self-healing: updating to SUPER_ADMIN...`);
+        await prisma.user.update({
+          where: { email: superAdminEmail },
+          data: {
+            role: "SUPER_ADMIN",
+            isActive: true
+          }
+        });
+        console.log("Super Admin role updated successfully!");
+      } else {
+        console.log("Super Admin already exists, skipping super admin seed.");
       }
+      return;
+    }
+
+    const superAdminExists = await prisma.user.findFirst({
+      where: { role: "SUPER_ADMIN" }
     });
 
     if (superAdminExists) {
@@ -40,7 +56,8 @@ export async function seedSuperAdmin() {
         password: hashedPassword,
         role: "SUPER_ADMIN",
         packageId: premiumPackage?.id || null,
-        usedStorageMB: 0
+        usedStorageMB: 0,
+        isActive: true
       }
     });
 

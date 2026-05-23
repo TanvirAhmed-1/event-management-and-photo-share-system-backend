@@ -48,6 +48,23 @@ const uploadPhotos = async (
     throw new Error("User not found!");
   }
 
+  // Check subscription expiration & user active status
+  if (!user.isActive) {
+    // Delete files from Cloudinary
+    for (const file of files) {
+      if (file.filename) await cloudinary.uploader.destroy(file.filename);
+    }
+    throw new Error("Please activate your plan and contact admin. Phone: 01786924911");
+  }
+
+  if (user.packageExpiredAt && new Date() > user.packageExpiredAt) {
+    // Delete files from Cloudinary
+    for (const file of files) {
+      if (file.filename) await cloudinary.uploader.destroy(file.filename);
+    }
+    throw new Error("Your subscription package has expired! Please upgrade or renew your package to upload photos.");
+  }
+
   // Calculate total upload size in MB
   const uploadSizeMB = files.reduce((acc, file) => {
     // Multer size is in bytes

@@ -14,13 +14,17 @@ const searchFace = catchAsync(async (req: Request, res: Response) => {
     throw new Error("Selfie file is required");
   }
 
-  const matchedPhotos = await AiService.searchFace(eventId, file);
+  const { photos, packageExpired, eventTitle } = await AiService.searchFace(eventId, file);
 
   res.status(httpStatus.OK).json({
     success: true,
     statusCode: httpStatus.OK,
-    message: `Face matching completed successfully! Found ${matchedPhotos.length} matching photos.`,
-    data: matchedPhotos,
+    message: packageExpired
+      ? "This event's package is inactive! Please ask the organizer to upgrade or renew."
+      : `Face matching completed successfully! Found ${photos.length} matching photos.`,
+    data: photos,
+    packageExpired,
+    eventTitle,
   });
 });
 

@@ -33,6 +33,9 @@ model User {
   package         Package? @relation(fields: [packageId], references: [id])
 
   usedStorageMB   Float    @default(0)
+  packageActivatedAt DateTime?
+  packageExpiredAt   DateTime?
+  isActive        Boolean  @default(false)
 
   events          Event[]
 
@@ -53,6 +56,7 @@ model Package {
   status          PackageStatus @default(ACTIVE)
 
   price           Float
+  durationDays    Int      @default(30)
 
   users           User[]
 
@@ -80,6 +84,7 @@ model Event {
 
   title           String
   coverImage      String?
+  isActive        Boolean  @default(true)
 
   userId          String
   user            User @relation(fields: [userId], references: [id])

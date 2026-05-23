@@ -10,19 +10,22 @@ export async function seedPackages() {
             name: "Free",
             storageLimitMB: 500,
             price: 0,
-            description: ["500 MB Storage", "Basic AI Matching", "Single Downloads"],
+            durationDays: 1,
+            description: ["500 MB Storage", "Basic AI Matching", "Single Downloads", "1 Day Free Trial"],
           },
           {
             name: "Basic",
             storageLimitMB: 5120, // 5 GB
             price: 19,
-            description: ["5 GB Storage", "Fast AI Matching", "ZIP Downloads", "Email Support"],
+            durationDays: 30,
+            description: ["5 GB Storage", "Fast AI Matching", "ZIP Downloads", "Email Support", "30 Days Validity"],
           },
           {
             name: "Premium",
             storageLimitMB: 20480, // 20 GB
             price: 49,
-            description: ["20 GB Storage", "Priority AI Matching", "ZIP Downloads", "24/7 Priority Support"],
+            durationDays: 30,
+            description: ["20 GB Storage", "Priority AI Matching", "ZIP Downloads", "24/7 Priority Support", "30 Days Validity"],
           },
         ],
       });

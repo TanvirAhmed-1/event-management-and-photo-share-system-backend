@@ -3,6 +3,22 @@ import cloudinary from "../../utils/cloudinary";
 import { ICreateEventRequest, IUpdateEventRequest } from "./event.interface";
 
 const createEvent = async (userId: string, payload: ICreateEventRequest) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    throw new Error("User not found!");
+  }
+
+  if (!user.isActive) {
+    throw new Error("Please activate your plan and contact admin. Phone: 01786924911");
+  }
+
+  if (user.packageExpiredAt && new Date() > user.packageExpiredAt) {
+    throw new Error("Your subscription package has expired! Please upgrade or renew your package to create new events.");
+  }
+
   const result = await prisma.event.create({
     data: {
       title: payload.title,
@@ -13,10 +29,17 @@ const createEvent = async (userId: string, payload: ICreateEventRequest) => {
   return result;
 };
 
-const getAllEvents = async (userId: string) => {
+const getAllEvents = async (userId: string, isSuperAdmin = false) => {
   const result = await prisma.event.findMany({
-    where: { userId },
+    where: isSuperAdmin ? {} : { userId },
     include: {
+      user: {
+        select: {
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
       _count: {
         select: { photos: true },
       },
@@ -142,10 +165,29 @@ const deleteEvent = async (userId: string, eventId: string) => {
   return { message: "Event and all its photos deleted successfully!" };
 };
 
+const toggleEventActiveAdmin = async (eventId: string) => {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+  });
+
+  if (!event) {
+    throw new Error("Event not found!");
+  }
+
+  const result = await prisma.event.update({
+    where: { id: eventId },
+    data: {
+      isActive: !event.isActive,
+    },
+  });
+  return result;
+};
+
 export const EventService = {
   createEvent,
   getAllEvents,
   getEventById,
   updateEvent,
   deleteEvent,
+  toggleEventActiveAdmin,
 };

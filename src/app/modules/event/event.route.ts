@@ -9,5 +9,6 @@ router.get("/", auth(), EventController.getAllEvents);
 router.get("/:id", auth(), EventController.getEventById);
 router.patch("/:id", auth(), EventController.updateEvent);
 router.delete("/:id", auth(), EventController.deleteEvent);
+router.patch("/admin/events/:id/toggle-active", auth(), EventController.toggleEventActiveAdmin);
 
 export const EventRoutes = router;

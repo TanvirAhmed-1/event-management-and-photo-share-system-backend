@@ -23,11 +23,12 @@ const createEvent = catchAsync(async (req: Request, res: Response) => {
 
 const getAllEvents = catchAsync(async (req: Request, res: Response) => {
   const userId = (req as AuthenticatedRequest).user?.id;
+  const userRole = (req as AuthenticatedRequest).user?.role;
   if (!userId) {
     throw new Error("Unauthorized Access");
   }
 
-  const result = await EventService.getAllEvents(userId);
+  const result = await EventService.getAllEvents(userId, userRole === "SUPER_ADMIN");
 
   res.status(httpStatus.OK).json({
     success: true,
@@ -85,10 +86,28 @@ const deleteEvent = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const toggleEventActiveAdmin = catchAsync(async (req: Request, res: Response) => {
+  const userRole = (req as AuthenticatedRequest).user?.role;
+  if (userRole !== "SUPER_ADMIN") {
+    throw new Error("Forbidden Access! Super Admin privileges required.");
+  }
+
+  const { id } = req.params;
+  const result = await EventService.toggleEventActiveAdmin(id);
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    statusCode: httpStatus.OK,
+    message: `Event activation status updated successfully! Current status: ${result.isActive ? "Active" : "Inactive"}`,
+    data: result,
+  });
+});
+
 export const EventController = {
   createEvent,
   getAllEvents,
   getEventById,
   updateEvent,
   deleteEvent,
+  toggleEventActiveAdmin,
 };

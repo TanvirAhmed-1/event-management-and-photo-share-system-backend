@@ -13,13 +13,33 @@ const searchFace = async (eventId: string, selfieFile: Express.Multer.File) => {
   const selfiePublicId = selfieFile.filename; // Cloudinary public_id
 
   try {
+    // Fetch event along with User and Package details
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      include: {
+        user: {
+          include: { package: true },
+        },
+      },
+    });
+
+    if (!event) {
+      throw new Error("Event not found!");
+    }
+
+    if (!event.isActive) {
+      throw new Error("This wedding event has been deactivated by the organizer or super admin.");
+    }
+
+    const isExpired = event.user.packageExpiredAt ? new Date() > event.user.packageExpiredAt : false;
+
     // 1. Fetch all photos in the event
     const photos = await prisma.photo.findMany({
       where: { eventId },
     });
 
     if (photos.length === 0) {
-      return [];
+      return { photos: [], packageExpired: isExpired, eventTitle: event.title };
     }
 
     // 2. Fetch all face embeddings for the given event
@@ -68,7 +88,7 @@ const searchFace = async (eventId: string, selfieFile: Express.Multer.File) => {
         },
         orderBy: { createdAt: "desc" },
       });
-      return matchedPhotos;
+      return { photos: matchedPhotos, packageExpired: isExpired, eventTitle: event.title };
     }
 
     // 3. Format candidates for the Python service
@@ -108,7 +128,7 @@ const searchFace = async (eventId: string, selfieFile: Express.Multer.File) => {
       orderBy: { createdAt: "desc" },
     });
 
-    return matchedPhotos;
+    return { photos: matchedPhotos, packageExpired: isExpired, eventTitle: event.title };
   } finally {
     // 6. Always delete the guest's selfie from Cloudinary to protect privacy and save space
     try {
