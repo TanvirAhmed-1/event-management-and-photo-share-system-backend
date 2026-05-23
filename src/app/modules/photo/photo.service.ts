@@ -199,6 +199,13 @@ const getPhotosByEvent = async (userId: string, eventId: string) => {
 
   const result = await prisma.photo.findMany({
     where: { eventId },
+    include: {
+      faces: {
+        select: {
+          id: true,
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
 

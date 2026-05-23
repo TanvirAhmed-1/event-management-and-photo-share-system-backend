@@ -40,7 +40,24 @@ const processPhotoEmbeddings = catchAsync(async (req: Request, res: Response) =>
   });
 });
 
+const reprocessEventEmbeddings = catchAsync(async (req: Request, res: Response) => {
+  const { eventId } = req.body;
+  if (!eventId) {
+    throw new Error("Event ID is required");
+  }
+
+  const result = await AiService.reprocessEventEmbeddings(eventId);
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Event photos reprocessed successfully!",
+    data: result,
+  });
+});
+
 export const AiController = {
   searchFace,
   processPhotoEmbeddings,
+  reprocessEventEmbeddings,
 };

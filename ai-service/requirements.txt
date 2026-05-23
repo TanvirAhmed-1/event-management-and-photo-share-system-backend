@@ -1,6 +1,6 @@
 flask
 deepface
-opencv-python
+opencv-python-headless
 requests
 numpy
 gunicorn

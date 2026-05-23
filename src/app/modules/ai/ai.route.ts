@@ -10,4 +10,7 @@ router.post("/search-face", upload.single("selfie"), AiController.searchFace);
 // Process single photo manually (e.g. for testing/reprocessing)
 router.post("/process-photo", AiController.processPhotoEmbeddings);
 
+// Reprocess all photos in an event manually
+router.post("/reprocess-event", AiController.reprocessEventEmbeddings);
+
 export const AiRoutes = router;
