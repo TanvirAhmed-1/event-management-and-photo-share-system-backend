@@ -84,7 +84,7 @@ const searchFace = async (eventId: string, selfieFile: Express.Multer.File) => {
       const aiResponse = await axios.post(`${config.ai_service_url}/search-face`, {
         selfieUrl,
         candidates,
-        threshold: 0.55, // Similarity threshold
+        threshold: 0.45, // Similarity threshold
       });
 
       if (aiResponse.data.success) {
