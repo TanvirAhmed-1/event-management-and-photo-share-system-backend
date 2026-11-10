@@ -6,6 +6,10 @@ import { EventRoutes } from "../modules/event/event.route";
 import { PhotoRoutes } from "../modules/photo/photo.route";
 import { AiRoutes } from "../modules/ai/ai.route";
 import { ReviewRoutes } from "../modules/review/review.route";
+import { EventTypeRoutes } from "../modules/eventType/eventType.route";
+import { ServiceCatalogRoutes } from "../modules/serviceCatalog/serviceCatalog.route";
+import { FoodRoutes } from "../modules/food/food.route";
+import { PricingRoutes } from "../modules/pricing/pricing.route";
 
 const router = Router();
 
@@ -37,6 +41,22 @@ const moduleRoutes = [
   {
     path: "/reviews",
     route: ReviewRoutes,
+  },
+  {
+    path: "/event-types",
+    route: EventTypeRoutes,
+  },
+  {
+    path: "/services",
+    route: ServiceCatalogRoutes,
+  },
+  {
+    path: "/food",
+    route: FoodRoutes,
+  },
+  {
+    path: "/pricing",
+    route: PricingRoutes,
   },
 ];
 

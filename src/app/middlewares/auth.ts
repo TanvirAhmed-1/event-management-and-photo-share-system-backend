@@ -14,7 +14,7 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
-const auth = () => {
+const auth = (...allowedRoles: string[]) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const authHeader = req.headers.authorization;
@@ -35,6 +35,14 @@ const auth = () => {
         packageId?: string;
         role: string;
       };
+
+      if (allowedRoles.length && !allowedRoles.includes(decoded.role)) {
+        res.status(httpStatus.FORBIDDEN).json({
+          success: false,
+          message: "You do not have permission to perform this action!",
+        });
+        return;
+      }
 
       (req as AuthenticatedRequest).user = decoded;
       next();

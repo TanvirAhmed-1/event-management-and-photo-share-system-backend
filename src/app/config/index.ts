@@ -5,7 +5,7 @@ dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 export default {
   env: process.env.NODE_ENV || "development",
-  port: process.env.PORT || 5050,
+  port: process.env.PORT || 5000,
   bcrypt_salt_rounds: Number(process.env.BCRYPT_SALT_ROUNDS) || 12,
   jwt: {
     secret: process.env.JWT_SECRET || "super-secret-wedding-ai-photo-finder-key-2026",

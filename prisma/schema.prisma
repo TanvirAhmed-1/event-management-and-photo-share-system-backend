@@ -12,6 +12,7 @@ datasource db {
 
 enum Role {
   USER
+  VENDOR
   SUPER_ADMIN
 }
 
@@ -38,6 +39,9 @@ model User {
   isActive        Boolean  @default(false)
 
   events          Event[]
+  vendor          Vendor?
+  bookings        Booking[]
+  entitlements    AiPhotoShareEntitlement[]
 
   createdAt       DateTime @default(now())
 
@@ -91,11 +95,37 @@ model Event {
 
   photos          Photo[]
 
+  // ---- Dynamic event engine (all nullable => backward compatible) ----
+  eventNo             String?       @unique
+  eventTypeId         String?
+  eventType           EventType?    @relation(fields: [eventTypeId], references: [id], onDelete: Restrict)
+  status              EventStatus   @default(DRAFT)
+  wizardStep          Int           @default(1)
+  eventDate           DateTime?     @db.Date
+  eventTime           String?
+  venue               String?
+  guestCount          Int?
+  description         String?
+  additionalRequirements String?
+  customFieldValues   Json?
+  repriceOnGuestChange RepriceMode  @default(KEEP_CONFIRMED_PRICES)
+  confirmedAt         DateTime?
+
+  serviceSelections   EventServiceSelection[]
+  foodSelections      EventFoodSelection[]
+  budget              EventBudget?
+  priceSnapshots      PriceSnapshot[]
+  bookings            Booking[]
+  entitlement         AiPhotoShareEntitlement?
+  galleryShareLinks   GalleryShareLink[]
+  payments            Payment[]
+
   createdAt       DateTime @default(now())
 
   @@map("events")
   @@index([userId])
   @@index([createdAt])
+  @@index([eventTypeId, status])
 }
 
 
@@ -129,4 +159,728 @@ model Review {
 
   @@map("reviews")
   @@index([createdAt])
+}
+
+
+// =====================================================================
+// Dynamic Event-Type / Service / Food / Pricing engine  (SRS §36)
+// =====================================================================
+
+enum PricingModel {
+  FIXED
+  PER_PERSON
+  PER_HOUR
+  PER_DAY
+  PER_UNIT
+  CUSTOM_QUOTATION
+}
+
+enum VendorSelectionMode {
+  NONE
+  OPTIONAL
+  REQUIRED
+}
+
+enum AiPhotoShareMode {
+  NONE
+  INCLUDED
+  ADDON
+}
+
+enum EventStatus {
+  DRAFT
+  PLANNING
+  BOOKING_IN_PROGRESS
+  PARTIALLY_CONFIRMED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  ARCHIVED
+}
+
+enum RepriceMode {
+  KEEP_CONFIRMED_PRICES
+  USE_CURRENT_PRICES
+}
+
+enum SelectionStatus {
+  SELECTED
+  AWAITING_QUOTATION
+  BOOKING_PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model EventType {
+  id                    String   @id @default(uuid())
+  name                  String
+  slug                  String   @unique
+  description           String?
+  imageUrl              String?
+  minGuests             Int      @default(1)
+  maxGuests             Int?
+  defaultGuests         Int?
+  allowServiceSelection Boolean  @default(true)
+  allowFoodSelection    Boolean  @default(true)
+  displayOrder          Int      @default(0)
+  isActive              Boolean  @default(true)
+  deletedAt             DateTime?
+
+  fields                EventTypeField[]
+  services              EventTypeService[]
+  foods                 EventTypeFood[]
+  events                Event[]
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([isActive, displayOrder])
+  @@map("event_types")
+}
+
+model EventTypeField {
+  id           String   @id @default(uuid())
+  eventTypeId  String
+  eventType    EventType @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+
+  key          String
+  label        String
+  fieldType    String   @default("TEXT") // TEXT | NUMBER | DATE | SELECT | BOOLEAN
+  options      Json?
+  isRequired   Boolean  @default(false)
+  isEnabled    Boolean  @default(true)
+  isSystem     Boolean  @default(false)
+  displayOrder Int      @default(0)
+
+  @@unique([eventTypeId, key])
+  @@map("event_type_fields")
+}
+
+model ServiceCategory {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique
+  imageUrl     String?
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+
+  services     Service[]
+
+  @@map("service_categories")
+}
+
+model Service {
+  id               String   @id @default(uuid())
+  categoryId       String?
+  category         ServiceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  name             String
+  slug             String   @unique
+  description      String?
+  images           String[]
+
+  pricingModel     PricingModel
+  basePrice        Decimal? @db.Decimal(14, 2)
+  unitLabel        String?
+  minQuantity      Int      @default(1)
+  maxQuantity      Int?
+  minHours         Int?
+  maxHours         Int?
+  minDays          Int?
+  maxDays          Int?
+
+  isVendorBased    Boolean  @default(false)
+  aiPhotoShareMode AiPhotoShareMode @default(NONE)
+  aiAddonPrice     Decimal? @db.Decimal(14, 2)
+  defaultStoragePlanId String?
+
+  isActive         Boolean  @default(true)
+  deletedAt        DateTime?
+
+  eventTypes       EventTypeService[]
+  packages         ServicePackage[]
+  selections       EventServiceSelection[]
+  bookings         Booking[]
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([categoryId, isActive])
+  @@map("services")
+}
+
+model EventTypeService {
+  id                    String   @id @default(uuid())
+  eventTypeId           String
+  eventType             EventType @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  serviceId             String
+  service               Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  isRequired            Boolean  @default(false)
+  isActive              Boolean  @default(true)
+  displayOrder          Int      @default(0)
+  minQuantity           Int?
+  maxQuantity           Int?
+  defaultQuantity       Int?
+  priceOverride         Decimal? @db.Decimal(14, 2)
+  allowMultipleVendors  Boolean  @default(false)
+  allowMultiplePackages Boolean  @default(false)
+  vendorSelectionMode   VendorSelectionMode @default(OPTIONAL)
+
+  @@unique([eventTypeId, serviceId])
+  @@index([serviceId])
+  @@map("event_type_services")
+}
+
+model ServicePackage {
+  id           String   @id @default(uuid())
+  serviceId    String
+  service      Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  vendorId     String?
+
+  name         String
+  description  String?
+  pricingModel PricingModel
+  price        Decimal? @db.Decimal(14, 2)
+  features     String[]
+  isActive     Boolean  @default(true)
+  bookings     Booking[]
+
+  @@index([serviceId, vendorId])
+  @@map("service_packages")
+}
+
+model FoodCategory {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique
+  imageUrl     String?
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+
+  items        FoodItem[]
+  assignments  EventTypeFood[]
+
+  @@map("food_categories")
+}
+
+model FoodItem {
+  id                    String   @id @default(uuid())
+  categoryId            String
+  category              FoodCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  name                  String
+  slug                  String   @unique
+  description           String?
+  images                String[]
+  pricePerPerson        Decimal  @db.Decimal(14, 2)
+  dietaryLabels         String[]
+  minOrderQuantity      Int      @default(1)
+  maxOrderQuantity      Int?
+  allowQuantityOverride Boolean  @default(false)
+  isActive              Boolean  @default(true)
+  deletedAt             DateTime?
+
+  packageItems          FoodPackageItem[]
+  assignments           EventTypeFood[]
+  selections            EventFoodSelection[]
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([categoryId, isActive])
+  @@map("food_items")
+}
+
+model FoodPackage {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  imageUrl       String?
+  pricePerPerson Decimal  @db.Decimal(14, 2)
+  minPersons     Int      @default(1)
+  isActive       Boolean  @default(true)
+
+  items          FoodPackageItem[]
+  assignments    EventTypeFood[]
+  selections     EventFoodSelection[]
+
+  @@map("food_packages")
+}
+
+model FoodPackageItem {
+  id         String      @id @default(uuid())
+  packageId  String
+  package    FoodPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  foodItemId String
+  foodItem   FoodItem    @relation(fields: [foodItemId], references: [id], onDelete: Restrict)
+
+  @@unique([packageId, foodItemId])
+  @@map("food_package_items")
+}
+
+// One row assigns EXACTLY ONE of: a category, an item or a combo to an event type.
+model EventTypeFood {
+  id                    String   @id @default(uuid())
+  eventTypeId           String
+  eventType             EventType @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+
+  foodCategoryId        String?
+  foodCategory          FoodCategory? @relation(fields: [foodCategoryId], references: [id], onDelete: Cascade)
+  foodItemId            String?
+  foodItem              FoodItem?     @relation(fields: [foodItemId], references: [id], onDelete: Cascade)
+  foodPackageId         String?
+  foodPackage           FoodPackage?  @relation(fields: [foodPackageId], references: [id], onDelete: Cascade)
+
+  isExcluded            Boolean  @default(false)
+  isActive              Boolean  @default(true)
+  displayOrder          Int      @default(0)
+  priceOverride         Decimal? @db.Decimal(14, 2)
+  minOrderOverride      Int?
+  allowQuantityOverride Boolean?
+  isDefaultSelected     Boolean  @default(false)
+
+  @@unique([eventTypeId, foodCategoryId])
+  @@unique([eventTypeId, foodItemId])
+  @@unique([eventTypeId, foodPackageId])
+  @@index([eventTypeId, isActive])
+  @@map("event_type_foods")
+}
+
+model EventServiceSelection {
+  id          String   @id @default(uuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  serviceId   String
+  service     Service  @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  packageId   String?
+  vendorId    String?
+
+  quantity    Int      @default(1)
+  hours       Int?
+  days        Int?
+  includeAiAddon Boolean @default(false)
+  notes       String?
+  status      SelectionStatus @default(SELECTED)
+
+  // Filled on confirmation (immutable price snapshot)
+  pricingModelSnapshot PricingModel?
+  unitPriceSnapshot    Decimal? @db.Decimal(14, 2)
+  lineTotalSnapshot    Decimal? @db.Decimal(14, 2)
+  nameSnapshot         String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([eventId])
+  @@index([serviceId])
+  @@map("event_service_selections")
+}
+
+model EventFoodSelection {
+  id            String   @id @default(uuid())
+  eventId       String
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  foodItemId    String?
+  foodItem      FoodItem?    @relation(fields: [foodItemId], references: [id], onDelete: Restrict)
+  foodPackageId String?
+  foodPackage   FoodPackage? @relation(fields: [foodPackageId], references: [id], onDelete: Restrict)
+
+  quantity             Int?     // null => follow event guest count
+  isQuantityOverridden Boolean  @default(false)
+
+  unitPriceSnapshot    Decimal? @db.Decimal(14, 2)
+  quantitySnapshot     Int?
+  lineTotalSnapshot    Decimal? @db.Decimal(14, 2)
+  nameSnapshot         String?
+
+  createdAt     DateTime @default(now())
+
+  @@index([eventId])
+  @@map("event_food_selections")
+}
+
+model EventBudget {
+  id          String   @id @default(uuid())
+  eventId     String   @unique
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  subtotal    Decimal  @db.Decimal(14, 2)
+  charges     Decimal  @db.Decimal(14, 2) @default(0)
+  discount    Decimal  @db.Decimal(14, 2) @default(0)
+  tax         Decimal  @db.Decimal(14, 2) @default(0)
+  grandTotal  Decimal  @db.Decimal(14, 2)
+  paid        Decimal  @db.Decimal(14, 2) @default(0)
+  currentSnapshotId String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("event_budgets")
+}
+
+model PriceSnapshot {
+  id          String   @id @default(uuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  version     Int
+  breakdown   Json
+  inputHash   String
+  grandTotal  Decimal  @db.Decimal(14, 2)
+  reason      String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@unique([eventId, version])
+  @@map("price_snapshots")
+}
+
+model ChargeRule {
+  id        String   @id @default(uuid())
+  name      String
+  valueType String   // FIXED | PERCENT
+  value     Decimal  @db.Decimal(14, 2)
+  eventTypeId String? // null => applies to all event types
+  isActive  Boolean  @default(true)
+
+  @@map("charge_rules")
+}
+
+model TaxRule {
+  id          String   @id @default(uuid())
+  name        String
+  ratePercent Decimal  @db.Decimal(5, 2)
+  eventTypeId String?
+  isActive    Boolean  @default(true)
+
+  @@map("tax_rules")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  action     String
+  entity     String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}
+
+
+// =====================================================================
+// Vendor, Booking, Payment & AI Entitlement System (SRS §10, 12, 13, 15)
+// =====================================================================
+
+enum VendorStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum DocumentType {
+  TRADE_LICENSE
+  NID
+  TIN
+  BANK_STATEMENT
+  OTHER
+}
+
+enum BookingStatus {
+  DRAFT
+  PENDING_AVAILABILITY
+  PENDING_VENDOR_APPROVAL
+  AWAITING_PAYMENT
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  CANCELLED
+  EXPIRED
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum ReservationStatus {
+  HELD
+  CONFIRMED
+  RELEASED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCESSFUL
+  FAILED
+  CANCELLED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  SSLCOMMERZ
+  BKASH
+  NAGAD
+  CARD
+  BANK_TRANSFER
+  CASH
+}
+
+enum PayoutStatus {
+  REQUESTED
+  APPROVED
+  PROCESSING
+  PAID
+  REJECTED
+}
+
+model Vendor {
+  id               String       @id @default(uuid())
+  userId           String       @unique
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  businessName     String
+  slug             String       @unique
+  ownerName        String
+  phone            String
+  email            String
+  address          String?
+  city             String?
+  businessCategory String?
+  description      String?
+  logoUrl          String?
+  status           VendorStatus @default(PENDING)
+  commissionRate   Decimal      @default(10.00) @db.Decimal(5, 2)
+  isVerified       Boolean      @default(false)
+  rejectionReason  String?
+
+  documents        VendorDocument[]
+  availability     VendorAvailability[]
+  bookings         Booking[]
+  wallet           VendorWallet?
+  payouts          VendorPayout[]
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([status])
+  @@index([city])
+  @@map("vendors")
+}
+
+model VendorDocument {
+  id           String       @id @default(uuid())
+  vendorId     String
+  vendor       Vendor       @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  documentType DocumentType
+  documentUrl  String
+  isVerified   Boolean      @default(false)
+  verifiedAt   DateTime?
+
+  createdAt    DateTime     @default(now())
+
+  @@index([vendorId])
+  @@map("vendor_documents")
+}
+
+model VendorAvailability {
+  id          String   @id @default(uuid())
+  vendorId    String
+  vendor      Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  serviceId   String?
+
+  date        DateTime @db.Date
+  isBlocked   Boolean  @default(false)
+  maxBookings Int      @default(1)
+  notes       String?
+
+  @@unique([vendorId, date])
+  @@index([date])
+  @@map("vendor_availabilities")
+}
+
+model Booking {
+  id               String        @id @default(uuid())
+  bookingNo        String        @unique // e.g. BKG-2026-000001
+  eventId          String
+  event            Event         @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  customerId       String
+  customer         User          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  vendorId         String?
+  vendor           Vendor?       @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  serviceId        String
+  service          Service       @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  packageId        String?
+  package          ServicePackage? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+
+  status           BookingStatus @default(PENDING_VENDOR_APPROVAL)
+  startAt          DateTime
+  endAt            DateTime
+
+  subtotal         Decimal       @db.Decimal(14, 2)
+  discount         Decimal       @default(0) @db.Decimal(14, 2)
+  tax              Decimal       @default(0) @db.Decimal(14, 2)
+  fees             Decimal       @default(0) @db.Decimal(14, 2)
+  total            Decimal       @db.Decimal(14, 2)
+
+  commissionRate   Decimal       @default(10.00) @db.Decimal(5, 2)
+  commissionAmount Decimal       @default(0) @db.Decimal(14, 2)
+  vendorNet        Decimal       @default(0) @db.Decimal(14, 2)
+
+  snapshot         Json          // Immutable price, terms & policy snapshot
+  cancellationReason String?
+  idempotencyKey   String?       @unique
+
+  history          BookingStatusHistory[]
+  reservations     BookingReservation[]
+  payments         Payment[]
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([eventId])
+  @@index([customerId, status])
+  @@index([vendorId, status])
+  @@index([serviceId, startAt, endAt])
+  @@map("bookings")
+}
+
+model BookingStatusHistory {
+  id         String        @id @default(uuid())
+  bookingId  String
+  booking    Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  fromStatus BookingStatus
+  toStatus   BookingStatus
+  actorId    String?
+  reason     String?
+  createdAt  DateTime      @default(now())
+
+  @@index([bookingId])
+  @@map("booking_status_histories")
+}
+
+model BookingReservation {
+  id        String            @id @default(uuid())
+  bookingId String
+  booking   Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  serviceId String
+  vendorId  String?
+  startAt   DateTime
+  endAt     DateTime
+  status    ReservationStatus @default(HELD)
+  expiresAt DateTime?
+
+  createdAt DateTime          @default(now())
+
+  @@index([serviceId, startAt, endAt])
+  @@index([vendorId, startAt, endAt])
+  @@map("booking_reservations")
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  paymentNo      String        @unique // e.g. PAY-2026-000001
+  bookingId      String?
+  booking        Booking?      @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  eventId        String?
+  event          Event?        @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  customerId     String
+  customer       User          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  amount         Decimal       @db.Decimal(14, 2)
+  currency       String        @default("BDT")
+  method         PaymentMethod @default(SSLCOMMERZ)
+  gateway        String?
+  gatewayTxnId   String?       @unique
+  status         PaymentStatus @default(PENDING)
+  idempotencyKey String?       @unique
+  rawPayload     Json?
+  paidAt         DateTime?
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([bookingId])
+  @@index([eventId])
+  @@index([customerId, status])
+  @@map("payments")
+}
+
+model VendorWallet {
+  id               String   @id @default(uuid())
+  vendorId         String   @unique
+  vendor           Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  pendingBalance   Decimal  @default(0) @db.Decimal(14, 2)
+  availableBalance Decimal  @default(0) @db.Decimal(14, 2)
+  paidOutBalance   Decimal  @default(0) @db.Decimal(14, 2)
+
+  updatedAt        DateTime @updatedAt
+
+  @@map("vendor_wallets")
+}
+
+model VendorPayout {
+  id             String       @id @default(uuid())
+  vendorId       String
+  vendor         Vendor       @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+
+  amount         Decimal      @db.Decimal(14, 2)
+  status         PayoutStatus @default(REQUESTED)
+  method         String       @default("BANK")
+  accountDetails Json
+  adminNotes     String?
+  processedAt    DateTime?
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([vendorId, status])
+  @@map("vendor_payouts")
+}
+
+model AiPhotoShareEntitlement {
+  id             String   @id @default(uuid())
+  eventId        String   @unique
+  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ownerId        String
+  owner          User     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  bookingId      String?
+
+  storageLimitMB Float    @default(5000)
+  usedStorageMB  Float    @default(0)
+  isActive       Boolean  @default(true)
+  activatedAt    DateTime @default(now())
+  expiresAt      DateTime
+
+  source         String   @default("ADDON") // ADDON | DIRECT_PURCHASE | ADMIN_GRANT
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([ownerId])
+  @@map("ai_photo_share_entitlements")
+}
+
+model GalleryShareLink {
+  id            String    @id @default(uuid())
+  eventId       String
+  event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  token         String    @unique
+  allowDownload Boolean   @default(true)
+  showAllPhotos Boolean   @default(false)
+  expiresAt     DateTime?
+
+  createdAt     DateTime  @default(now())
+
+  @@index([eventId])
+  @@map("gallery_share_links")
 }

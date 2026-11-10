@@ -10,7 +10,6 @@ const createEvent = catchAsync(async (req: Request, res: Response) => {
     throw new Error("Unauthorized Access");
   }
 
-  // Cover image can be sent via request body (either direct URL or after a previous upload process)
   const result = await EventService.createEvent(userId, req.body);
 
   res.status(httpStatus.CREATED).json({
@@ -40,11 +39,12 @@ const getAllEvents = catchAsync(async (req: Request, res: Response) => {
 
 const getEventById = catchAsync(async (req: Request, res: Response) => {
   const userId = (req as AuthenticatedRequest).user?.id;
+  const userRole = (req as AuthenticatedRequest).user?.role;
   if (!userId) {
     throw new Error("Unauthorized Access");
   }
 
-  const result = await EventService.getEventById(userId, req.params.id);
+  const result = await EventService.getEventById(userId, req.params.id, userRole === "SUPER_ADMIN");
 
   res.status(httpStatus.OK).json({
     success: true,
@@ -54,18 +54,102 @@ const getEventById = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-const updateEvent = catchAsync(async (req: Request, res: Response) => {
+const updateEventDetails = catchAsync(async (req: Request, res: Response) => {
   const userId = (req as AuthenticatedRequest).user?.id;
   if (!userId) {
     throw new Error("Unauthorized Access");
   }
 
-  const result = await EventService.updateEvent(userId, req.params.id, req.body);
+  const result = await EventService.updateEventDetails(userId, req.params.id, req.body);
 
   res.status(httpStatus.OK).json({
     success: true,
     statusCode: httpStatus.OK,
-    message: "Event updated successfully!",
+    message: "Event details updated successfully!",
+    data: result,
+  });
+});
+
+const selectServices = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as AuthenticatedRequest).user?.id;
+  if (!userId) {
+    throw new Error("Unauthorized Access");
+  }
+
+  const result = await EventService.selectServices(userId, req.params.id, req.body);
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Services selected for event successfully!",
+    data: result,
+  });
+});
+
+const selectFood = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as AuthenticatedRequest).user?.id;
+  if (!userId) {
+    throw new Error("Unauthorized Access");
+  }
+
+  const result = await EventService.selectFood(userId, req.params.id, req.body);
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Food menu selected for event successfully!",
+    data: result,
+  });
+});
+
+const previewEventBudget = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as AuthenticatedRequest).user?.id;
+  if (!userId) {
+    throw new Error("Unauthorized Access");
+  }
+
+  const result = await EventService.previewEventBudget(userId, req.params.id);
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Event budget preview calculated successfully!",
+    data: result,
+  });
+});
+
+const confirmEvent = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as AuthenticatedRequest).user?.id;
+  if (!userId) {
+    throw new Error("Unauthorized Access");
+  }
+
+  const result = await EventService.confirmEvent(userId, req.params.id, req.body);
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Event confirmed successfully! Budget and selections are locked.",
+    data: result,
+  });
+});
+
+const updateGuestCount = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as AuthenticatedRequest).user?.id;
+  if (!userId) {
+    throw new Error("Unauthorized Access");
+  }
+
+  const result = await EventService.updateGuestCount(
+    userId,
+    req.params.id,
+    req.body.guestCount
+  );
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Guest count and per-person food quantities updated successfully!",
     data: result,
   });
 });
@@ -107,7 +191,12 @@ export const EventController = {
   createEvent,
   getAllEvents,
   getEventById,
-  updateEvent,
+  updateEventDetails,
+  selectServices,
+  selectFood,
+  previewEventBudget,
+  confirmEvent,
+  updateGuestCount,
   deleteEvent,
   toggleEventActiveAdmin,
 };
