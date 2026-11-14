@@ -12,6 +12,7 @@ import {
 } from "./event.interface";
 import { PricingService } from "../pricing/pricing.service";
 import { toDecimal, roundMoney } from "../../utils/money";
+import { SettingsService } from "../settings/settings.service";
 
 // ==========================================
 // 1. Create and List Events
@@ -50,6 +51,36 @@ const createEvent = async (userId: string, payload: ICreateEventRequest) => {
     }
   }
 
+  // Enforce Event Date Capacity & Same-Date Request Policy
+  let dateConflictWarning = false;
+  if (payload.eventDate) {
+    const parsedDate = new Date(payload.eventDate);
+    if (!isNaN(parsedDate.getTime())) {
+      const dateStr = parsedDate.toISOString().split("T")[0];
+      const dayStart = new Date(`${dateStr}T00:00:00.000Z`);
+      const dayEnd = new Date(`${dateStr}T23:59:59.999Z`);
+
+      const settings = await SettingsService.getPlatformSettings();
+      const existingOnDate = await prisma.event.count({
+        where: {
+          eventDate: { gte: dayStart, lte: dayEnd },
+          status: { notIn: ["CANCELLED", "ARCHIVED"] },
+          isActive: true,
+        },
+      });
+
+      if (existingOnDate >= settings.maxEventsPerDay) {
+        if (!settings.allowSameDateRequests) {
+          throw new AppError(
+            httpStatus.CONFLICT,
+            `Date ${dateStr} is already full (Max ${settings.maxEventsPerDay} event(s)/day). Please choose another date.`
+          );
+        }
+        dateConflictWarning = true;
+      }
+    }
+  }
+
   const result = await prisma.event.create({
     data: {
       title: payload.title,
@@ -70,7 +101,7 @@ const createEvent = async (userId: string, payload: ICreateEventRequest) => {
     },
   });
 
-  return result;
+  return { ...result, dateConflictWarning };
 };
 
 const getAllEvents = async (userId: string, isSuperAdmin = false) => {
@@ -729,6 +760,86 @@ const toggleEventActiveAdmin = async (eventId: string) => {
   return result;
 };
 
+const getDateAvailabilitySummary = async () => {
+  const settings = await SettingsService.getPlatformSettings();
+  const events = await prisma.event.findMany({
+    where: {
+      eventDate: { not: null },
+      status: { notIn: ["CANCELLED", "ARCHIVED"] },
+      isActive: true,
+    },
+    select: {
+      id: true,
+      eventDate: true,
+      status: true,
+    },
+  });
+
+  const dates: Record<
+    string,
+    { total: number; confirmed: number; pending: number; isFull: boolean }
+  > = {};
+
+  for (const ev of events) {
+    if (!ev.eventDate) continue;
+    const dateStr = ev.eventDate.toISOString().split("T")[0];
+    if (!dates[dateStr]) {
+      dates[dateStr] = { total: 0, confirmed: 0, pending: 0, isFull: false };
+    }
+    dates[dateStr].total += 1;
+    if (ev.status === "CONFIRMED" || ev.status === "IN_PROGRESS" || ev.status === "COMPLETED") {
+      dates[dateStr].confirmed += 1;
+    } else {
+      dates[dateStr].pending += 1;
+    }
+    dates[dateStr].isFull = dates[dateStr].total >= settings.maxEventsPerDay;
+  }
+
+  return { settings, dates };
+};
+
+const updateEventStatusAdmin = async (
+  eventId: string,
+  status: "CONFIRMED" | "CANCELLED" | "PLANNING" | "DRAFT",
+  allowMultipleOverride = false
+) => {
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event) {
+    throw new AppError(httpStatus.NOT_FOUND, "Event not found!");
+  }
+
+  if (status === "CONFIRMED" && event.eventDate) {
+    const settings = await SettingsService.getPlatformSettings();
+    const dateStr = event.eventDate.toISOString().split("T")[0];
+    const dayStart = new Date(`${dateStr}T00:00:00.000Z`);
+    const dayEnd = new Date(`${dateStr}T23:59:59.999Z`);
+
+    const confirmedCount = await prisma.event.count({
+      where: {
+        id: { not: eventId },
+        eventDate: { gte: dayStart, lte: dayEnd },
+        status: { in: ["CONFIRMED", "IN_PROGRESS"] },
+        isActive: true,
+      },
+    });
+
+    if (confirmedCount >= settings.maxEventsPerDay && !allowMultipleOverride) {
+      throw new AppError(
+        httpStatus.CONFLICT,
+        `SAME_DATE_CONFLICT: ${confirmedCount} event(s) already confirmed on ${dateStr} (Daily limit: ${settings.maxEventsPerDay}). Review and approve override to grant multiple-event access.`
+      );
+    }
+  }
+
+  const updated = await prisma.event.update({
+    where: { id: eventId },
+    data: { status },
+    include: { eventType: true, user: { select: { name: true, email: true, phone: true } } },
+  });
+
+  return updated;
+};
+
 export const EventService = {
   createEvent,
   getAllEvents,
@@ -741,4 +852,6 @@ export const EventService = {
   updateGuestCount,
   deleteEvent,
   toggleEventActiveAdmin,
+  getDateAvailabilitySummary,
+  updateEventStatusAdmin,
 };

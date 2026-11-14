@@ -13,6 +13,7 @@ router.post(
   validateData(EventValidation.createEventSchema),
   EventController.createEvent
 );
+router.get("/availability", EventController.getDateAvailabilitySummary);
 router.get("/", auth(), EventController.getAllEvents);
 router.get("/:id", auth(), EventController.getEventById);
 
@@ -57,5 +58,6 @@ router.patch(
 // 3. Deletion & Admin Controls
 router.delete("/:id", auth(), EventController.deleteEvent);
 router.patch("/admin/events/:id/toggle-active", auth(), EventController.toggleEventActiveAdmin);
+router.patch("/admin/events/:id/status", auth("SUPER_ADMIN", "ADMIN"), EventController.updateEventStatusAdmin);
 
 export const EventRoutes = router;

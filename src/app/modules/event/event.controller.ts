@@ -187,6 +187,38 @@ const toggleEventActiveAdmin = catchAsync(async (req: Request, res: Response) =>
   });
 });
 
+const getDateAvailabilitySummary = catchAsync(async (_req: Request, res: Response) => {
+  const data = await EventService.getDateAvailabilitySummary();
+  res.status(httpStatus.OK).json({
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Date availability summary retrieved successfully!",
+    data,
+  });
+});
+
+const updateEventStatusAdmin = catchAsync(async (req: Request, res: Response) => {
+  const userRole = (req as AuthenticatedRequest).user?.role;
+  if (userRole !== "SUPER_ADMIN" && userRole !== "ADMIN") {
+    throw new Error("Forbidden Access! Admin privileges required.");
+  }
+
+  const { id } = req.params;
+  const { status, allowMultipleOverride } = req.body;
+  const result = await EventService.updateEventStatusAdmin(
+    id,
+    status,
+    Boolean(allowMultipleOverride)
+  );
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    statusCode: httpStatus.OK,
+    message: `Event status updated to ${status}!`,
+    data: result,
+  });
+});
+
 export const EventController = {
   createEvent,
   getAllEvents,
@@ -199,4 +231,6 @@ export const EventController = {
   updateGuestCount,
   deleteEvent,
   toggleEventActiveAdmin,
+  getDateAvailabilitySummary,
+  updateEventStatusAdmin,
 };
