@@ -12,6 +12,8 @@ const getPlatformSettings = async () => {
         maxEventsPerDay: 1,
         allowSameDateRequests: true,
         warnAdminOnSameDate: true,
+        serviceCities: [],
+        serviceCities: [],
       },
     });
   }
@@ -23,8 +25,19 @@ const updatePlatformSettings = async (payload: {
   maxEventsPerDay?: number;
   allowSameDateRequests?: boolean;
   warnAdminOnSameDate?: boolean;
+  serviceCities?: string[];
 }) => {
   await getPlatformSettings();
+
+  const cleanCities = Array.isArray(payload.serviceCities)
+    ? Array.from(
+      new Set(
+        payload.serviceCities
+          .map((c) => String(c || "").trim())
+          .filter(Boolean)
+      )
+    )
+    : undefined;
 
   const updated = await prisma.platformSetting.update({
     where: { id: "default" },
@@ -38,6 +51,8 @@ const updatePlatformSettings = async (payload: {
       ...(payload.warnAdminOnSameDate !== undefined
         ? { warnAdminOnSameDate: Boolean(payload.warnAdminOnSameDate) }
         : {}),
+      ...(cleanCities !== undefined ? { serviceCities: cleanCities } : {}),
+      ...(cleanCities !== undefined ? { serviceCities: cleanCities } : {}),
     },
   });
 

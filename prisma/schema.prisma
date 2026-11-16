@@ -883,6 +883,7 @@ model PlatformSetting {
   maxEventsPerDay       Int      @default(1)
   allowSameDateRequests Boolean  @default(true)
   warnAdminOnSameDate   Boolean  @default(true)
+  serviceCities         String[] @default(["Dhaka", "Chittagong", "Sylhet", "Rajshahi", "Cox's Bazar", "Khulna"])
   updatedAt             DateTime @updatedAt
 
   @@map("platform_settings")
