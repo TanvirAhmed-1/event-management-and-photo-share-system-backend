@@ -10,36 +10,36 @@ const router = Router();
 router.get("/", EventTypeController.getAllEventTypes);
 router.get("/:id", EventTypeController.getEventTypeById);
 
-// Admin Management
+// Admin & Super Admin Management
 router.post(
   "/",
-  auth("SUPER_ADMIN"),
+  auth("ADMIN", "SUPER_ADMIN"),
   validateData(EventTypeValidation.createEventTypeSchema),
   EventTypeController.createEventType
 );
 
 router.patch(
   "/:id",
-  auth("SUPER_ADMIN"),
+  auth("ADMIN", "SUPER_ADMIN"),
   validateData(EventTypeValidation.updateEventTypeSchema),
   EventTypeController.updateEventType
 );
 
 router.delete(
   "/:id",
-  auth("SUPER_ADMIN"),
+  auth("ADMIN", "SUPER_ADMIN"),
   EventTypeController.deleteEventType
 );
 
 router.patch(
   "/:id/toggle-active",
-  auth("SUPER_ADMIN"),
+  auth("ADMIN", "SUPER_ADMIN"),
   EventTypeController.toggleActiveEventType
 );
 
 router.put(
   "/:id/fields",
-  auth("SUPER_ADMIN"),
+  auth("ADMIN", "SUPER_ADMIN"),
   validateData(EventTypeValidation.updateFieldsSchema),
   EventTypeController.syncEventTypeFields
 );

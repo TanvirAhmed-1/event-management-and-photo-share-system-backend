@@ -12,6 +12,7 @@ import { FoodRoutes } from "../modules/food/food.route";
 import { PricingRoutes } from "../modules/pricing/pricing.route";
 import { SettingsRoutes } from "../modules/settings/settings.route";
 import { BlogRoutes } from "../modules/blog/blog.route";
+import { UploadRoutes } from "../modules/upload/upload.route";
 
 const router = Router();
 
@@ -67,6 +68,10 @@ const moduleRoutes = [
   {
     path: "/blogs",
     route: BlogRoutes,
+  },
+  {
+    path: "/upload",
+    route: UploadRoutes,
   },
 ];
 

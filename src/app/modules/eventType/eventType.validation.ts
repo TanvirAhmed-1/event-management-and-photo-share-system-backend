@@ -12,11 +12,20 @@ const eventTypeFieldSchema = z.object({
   displayOrder: z.number().int().optional(),
 });
 
+const imageUrlSchema = z
+  .string()
+  .refine(
+    (val) => !val || val.startsWith("http://") || val.startsWith("https://") || val.startsWith("/"),
+    "Invalid image URL or path"
+  )
+  .optional()
+  .nullable();
+
 const createEventTypeSchema = z.object({
   name: z.string({ required_error: "Name is required" }).min(2, "Name must be at least 2 characters"),
   slug: z.string().optional(),
   description: z.string().optional(),
-  imageUrl: z.string().url("Invalid image URL").optional().or(z.literal("")),
+  imageUrl: imageUrlSchema,
   minGuests: z.number().int().positive().default(1),
   maxGuests: z.number().int().positive().optional().nullable(),
   defaultGuests: z.number().int().positive().optional().nullable(),
@@ -30,7 +39,7 @@ const updateEventTypeSchema = z.object({
   name: z.string().min(2).optional(),
   slug: z.string().optional(),
   description: z.string().optional(),
-  imageUrl: z.string().url().optional().or(z.literal("")),
+  imageUrl: imageUrlSchema,
   minGuests: z.number().int().positive().optional(),
   maxGuests: z.number().int().positive().optional().nullable(),
   defaultGuests: z.number().int().positive().optional().nullable(),
