@@ -840,6 +840,202 @@ const updateEventStatusAdmin = async (
   return updated;
 };
 
+const customCreateEvent = async (userId: string, payload: any) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, "User not found!");
+  }
+
+  const eventType = await prisma.eventType.findUnique({
+    where: { id: payload.eventTypeId },
+  });
+  if (!eventType || eventType.deletedAt || !eventType.isActive) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Selected event type is invalid or inactive!");
+  }
+
+  const targetDate = new Date(payload.eventDate);
+  if (isNaN(targetDate.getTime())) {
+    throw new AppError(httpStatus.BAD_REQUEST, "Invalid event date format!");
+  }
+
+  const dayStart = new Date(targetDate);
+  dayStart.setUTCHours(0, 0, 0, 0);
+  const dayEnd = new Date(targetDate);
+  dayEnd.setUTCHours(23, 59, 59, 999);
+
+  const requestedServiceIds = (payload.services || []).map((s: any) => s.serviceId);
+
+  // 1. Date Availability Check
+  if (requestedServiceIds.length > 0) {
+    const conflicts = await prisma.eventServiceSelection.findMany({
+      where: {
+        serviceId: { in: requestedServiceIds },
+        event: {
+          eventDate: { gte: dayStart, lte: dayEnd },
+          status: { in: ["CONFIRMED", "IN_PROGRESS", "BOOKING_IN_PROGRESS"] },
+          isActive: true,
+        },
+      },
+      include: { service: true },
+    });
+
+    if (conflicts.length > 0) {
+      const conflictNames = conflicts.map((c) => c.service.name).join(", ");
+      throw new AppError(
+        httpStatus.CONFLICT,
+        `Date conflict: ${conflictNames} already booked on ${targetDate.toISOString().slice(0, 10)}. Please choose another date or service.`
+      );
+    }
+  }
+
+  // 2. Fetch Services & Food Items securely from DB
+  const dbServices = requestedServiceIds.length
+    ? await prisma.service.findMany({
+        where: { id: { in: requestedServiceIds }, isActive: true, deletedAt: null },
+      })
+    : [];
+  const serviceMap = new Map(dbServices.map((s) => [s.id, s]));
+
+  const requestedFoodIds = (payload.foods || []).map((f: any) => f.foodItemId);
+  const dbFoods = requestedFoodIds.length
+    ? await prisma.foodItem.findMany({
+        where: { id: { in: requestedFoodIds }, isActive: true, deletedAt: null },
+      })
+    : [];
+  const foodMap = new Map(dbFoods.map((f) => [f.id, f]));
+
+  const guestCount = Number(payload.guestCount) || 100;
+  let servicesTotal = 0;
+  let foodTotal = 0;
+
+  const serviceLines = (payload.services || [])
+    .map((reqSvc: any) => {
+      const svc = serviceMap.get(reqSvc.serviceId);
+      if (!svc) return null;
+      const base = Number(svc.basePrice);
+      const qty = Number(reqSvc.quantity) || 1;
+      let lineTotal = base * qty;
+      if (svc.pricingModel === "PER_PERSON") lineTotal = base * guestCount * qty;
+      else if (svc.pricingModel === "PER_HOUR") lineTotal = base * (Number(reqSvc.hours) || 4) * qty;
+      else if (svc.pricingModel === "PER_DAY") lineTotal = base * (Number(reqSvc.days) || 1) * qty;
+      servicesTotal += lineTotal;
+      return {
+        serviceId: svc.id,
+        quantity: qty,
+        hours: reqSvc.hours || null,
+        days: reqSvc.days || null,
+        includeAiAddon: !!reqSvc.includeAiAddon,
+        notes: reqSvc.notes || null,
+        pricingModelSnapshot: svc.pricingModel,
+        unitPriceSnapshot: svc.basePrice,
+        lineTotalSnapshot: lineTotal,
+        nameSnapshot: svc.name,
+      };
+    })
+    .filter(Boolean);
+
+  const foodLines = (payload.foods || [])
+    .map((reqFood: any) => {
+      const item = foodMap.get(reqFood.foodItemId);
+      if (!item) return null;
+      const unitPrice = Number(item.pricePerPerson);
+      const qty = Number(reqFood.quantity) || guestCount;
+      const lineTotal = unitPrice * qty;
+      foodTotal += lineTotal;
+      return {
+        foodItemId: item.id,
+        quantity: qty,
+        isQuantityOverridden: !!reqFood.quantity,
+        unitPriceSnapshot: item.pricePerPerson,
+        quantitySnapshot: qty,
+        lineTotalSnapshot: lineTotal,
+        nameSnapshot: item.name,
+      };
+    })
+    .filter(Boolean);
+
+  const subtotal = servicesTotal + foodTotal;
+  const tax = Math.round(subtotal * 0.05 * 100) / 100; // 5% VAT
+  const grandTotal = subtotal + tax;
+  const advancePaid = payload.payAdvance ? Math.round(grandTotal * 0.2 * 100) / 100 : 0;
+
+  const eventNo = `EVT-${new Date().getFullYear()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+  const fullVenue = [payload.venue, payload.area, payload.city].filter(Boolean).join(", ");
+  const eventTitle = payload.title?.trim() || `${eventType.name} — ${payload.city}`;
+
+  const created = await prisma.$transaction(async (tx) => {
+    const ev = await tx.event.create({
+      data: {
+        title: eventTitle,
+        coverImage: eventType.imageUrl || null,
+        userId,
+        eventTypeId: eventType.id,
+        eventNo,
+        status: "CONFIRMED",
+        wizardStep: 4,
+        eventDate: targetDate,
+        eventTime: payload.eventTime || "Evening (6:00 PM - 11:00 PM)",
+        venue: fullVenue,
+        guestCount,
+        additionalRequirements: payload.additionalRequirements || null,
+        confirmedAt: new Date(),
+        customFieldValues: {
+          city: payload.city,
+          area: payload.area || "",
+          customerName: payload.customerName,
+          customerPhone: payload.customerPhone,
+          customerEmail: payload.customerEmail || user.email,
+          paymentMethod: payload.paymentMethod || "BKASH",
+        },
+        serviceSelections: {
+          create: serviceLines as any,
+        },
+        foodSelections: {
+          create: foodLines as any,
+        },
+        budget: {
+          create: {
+            subtotal,
+            tax,
+            grandTotal,
+            paid: advancePaid,
+          },
+        },
+      },
+      include: {
+        eventType: true,
+        serviceSelections: true,
+        foodSelections: true,
+        budget: true,
+      },
+    });
+
+    return ev;
+  });
+
+  return {
+    bookingId: created.eventNo,
+    event: created,
+    invoice: {
+      bookingId: created.eventNo,
+      eventTitle: created.title,
+      eventDate: created.eventDate,
+      eventTime: created.eventTime,
+      venue: created.venue,
+      guestCount,
+      servicesTotal,
+      foodTotal,
+      subtotal,
+      vat: tax,
+      grandTotal,
+      advancePaid,
+      dueAmount: grandTotal - advancePaid,
+      paymentMethod: payload.paymentMethod || "BKASH",
+      status: created.status,
+    },
+  };
+};
+
 export const EventService = {
   createEvent,
   getAllEvents,
@@ -854,4 +1050,5 @@ export const EventService = {
   toggleEventActiveAdmin,
   getDateAvailabilitySummary,
   updateEventStatusAdmin,
+  customCreateEvent,
 };

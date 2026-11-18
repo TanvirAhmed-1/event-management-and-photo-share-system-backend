@@ -13,7 +13,6 @@ const getPlatformSettings = async () => {
         allowSameDateRequests: true,
         warnAdminOnSameDate: true,
         serviceCities: [],
-        serviceCities: [],
       },
     });
   }

@@ -219,6 +219,22 @@ const updateEventStatusAdmin = catchAsync(async (req: Request, res: Response) =>
   });
 });
 
+const customCreateEvent = catchAsync(async (req: Request, res: Response) => {
+  const userId = (req as AuthenticatedRequest).user?.id;
+  if (!userId) {
+    throw new Error("Unauthorized Access");
+  }
+
+  const result = await EventService.customCreateEvent(userId, req.body);
+
+  res.status(httpStatus.CREATED).json({
+    success: true,
+    statusCode: httpStatus.CREATED,
+    message: "Custom event booked and confirmed successfully!",
+    data: result,
+  });
+});
+
 export const EventController = {
   createEvent,
   getAllEvents,
@@ -233,4 +249,5 @@ export const EventController = {
   toggleEventActiveAdmin,
   getDateAvailabilitySummary,
   updateEventStatusAdmin,
+  customCreateEvent,
 };

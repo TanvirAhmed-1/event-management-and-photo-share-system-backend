@@ -13,6 +13,7 @@ import { PricingRoutes } from "../modules/pricing/pricing.route";
 import { SettingsRoutes } from "../modules/settings/settings.route";
 import { BlogRoutes } from "../modules/blog/blog.route";
 import { UploadRoutes } from "../modules/upload/upload.route";
+import { VendorRoutes } from "../modules/vendor/vendor.route";
 
 const router = Router();
 
@@ -72,6 +73,10 @@ const moduleRoutes = [
   {
     path: "/upload",
     route: UploadRoutes,
+  },
+  {
+    path: "/vendors",
+    route: VendorRoutes,
   },
 ];
 

@@ -59,6 +59,45 @@ const confirmEventSchema = z.object({
   expectedGrandTotal: z.number().nonnegative().optional().or(z.string().optional()),
 });
 
+const customCreateEventSchema = z.object({
+  title: z.string().min(2).optional(),
+  eventTypeId: z.string().uuid("Invalid eventTypeId"),
+  city: z.string().min(1, "City/Area is required"),
+  area: z.string().optional(),
+  venue: z.string().min(2, "Venue or event address is required"),
+  eventDate: z.string().min(1, "Event date is required"),
+  eventTime: z.string().optional(),
+  guestCount: z.number().int().positive("Guest count must be positive"),
+  services: z
+    .array(
+      z.object({
+        serviceId: z.string().uuid("Invalid serviceId"),
+        quantity: z.number().int().positive().optional().default(1),
+        hours: z.number().int().positive().optional(),
+        days: z.number().int().positive().optional(),
+        includeAiAddon: z.boolean().optional().default(false),
+        notes: z.string().optional(),
+      })
+    )
+    .optional()
+    .default([]),
+  foods: z
+    .array(
+      z.object({
+        foodItemId: z.string().uuid("Invalid foodItemId"),
+        quantity: z.number().int().positive().optional(),
+      })
+    )
+    .optional()
+    .default([]),
+  customerName: z.string().min(2, "Customer name is required"),
+  customerPhone: z.string().min(6, "Phone number is required"),
+  customerEmail: z.string().email().optional().or(z.literal("")),
+  paymentMethod: z.enum(["BKASH", "SSLCOMMERZ", "CASH"]).optional().default("BKASH"),
+  payAdvance: z.boolean().optional().default(true),
+  additionalRequirements: z.string().optional(),
+});
+
 export const EventValidation = {
   createEventSchema,
   updateEventDetailsSchema,
@@ -66,5 +105,6 @@ export const EventValidation = {
   selectFoodSchema,
   updateGuestCountSchema,
   confirmEventSchema,
+  customCreateEventSchema,
 };
 

@@ -8,6 +8,13 @@ const router = Router();
 
 // 1. Basic CRUD & Listing
 router.post(
+  "/custom-create",
+  auth(),
+  validateData(EventValidation.customCreateEventSchema),
+  EventController.customCreateEvent
+);
+
+router.post(
   "/",
   auth(),
   validateData(EventValidation.createEventSchema),
